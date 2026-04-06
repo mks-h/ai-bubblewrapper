@@ -2,49 +2,105 @@
 
 import argparse
 import os
-from typing import Callable, cast
+from pathlib import Path
+from typing import cast
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(
-        prog="ai-bwrap",
-        description="Uses bubblewrap utility to give your AI agent some safe space",
-    )
-    _ = parser.add_argument(
-        "command", help="The command (agent) ro run in sandbox")
-    _ = parser.add_argument(
-        "-d", "--dry-run", help="Log the command instead of running it", action="store_true")
-    return parser.parse_args()
+class Args:
+    command: str
+    dry_run: bool
+
+    @staticmethod
+    def parse_args():
+        parser = argparse.ArgumentParser(
+            prog="ai-bwrap",
+            description="Uses bubblewrap utility to give your AI agent some safe space",
+        )
+        _ = parser.add_argument(
+            "command", help="The command (agent) ro run in sandbox")
+        _ = parser.add_argument(
+            "-d", "--dry-run", help="Log the command instead of running it", action="store_true")
+        return parser.parse_args()
+
+    def __init__(self):
+        args = Args.parse_args()
+        self.command = cast(str, args.command)
+        self.dry_run = cast(bool, args.dry_run)
 
 
-type CmdArgs = Callable[[str], tuple[str, ...]]
+class ConstrCmd():
+    user_cmd: str
+    bwrap_args: list[str] = []
+
+    def ro_bind(self, path: str):
+        self.bwrap_args.extend(("--ro-bind", path, path))
+
+    def rw_bind(self, path: str):
+        self.bwrap_args.extend(("--bind", path, path))
+
+    def dev(self, path: str):
+        self.bwrap_args.extend(("--dev", path))
+
+    def proc(self, path: str):
+        self.bwrap_args.extend(("--proc", path))
+
+    def tmpfs(self, path: str):
+        self.bwrap_args.extend(("--tmpfs", path))
+
+    def share_net(self):
+        self.bwrap_args.append("--share-net")
+
+    def construct(self) -> list[str]:
+        self.bwrap_args.append(self.user_cmd)
+        return self.bwrap_args
+
+    def __init__(self, cmd: str):
+        self.user_cmd = cmd
 
 
-def prepare_command(cmd: str) -> tuple[str, ...]:
-    ro: CmdArgs = lambda path: ("--ro-bind", path, path)
-    rw: CmdArgs = lambda path: ("--bind", path, path)
-    dev: CmdArgs = lambda path: ("--dev", path)
-    proc: CmdArgs = lambda path: ("--proc", path)
-    tmpfs: CmdArgs = lambda path: ("--tmpfs", path)
+def prepare_command(cmd: str) -> list[str]:
+    bwrap_args = ConstrCmd(cmd)
+    bwrap_args.ro_bind("/")
+    bwrap_args.rw_bind(os.getcwd())
+    bwrap_args.dev("/dev")
+    bwrap_args.proc("/proc")
+    bwrap_args.tmpfs("/run")
+    bwrap_args.tmpfs("/tmp")
+    bwrap_args.share_net()
 
-    return (*ro("/"), *rw(os.getcwd()), *dev("/dev"),
-            *proc("/proc"), *tmpfs("/run"), *tmpfs("/tmp"),
-            "--share-net",
-            cmd)
+    if (cmd == "pi"):
+        config_dir = os.environ.get("PI_CODING_AGENT_DIR", "~/.pi")
+        bwrap_args.rw_bind(config_dir)
+    elif (cmd == "opencode"):
+        config_home = Path(os.environ.get("XDG_CONFIG_HOME", "~/.config"))
+        config_dir = Path(os.environ.get("OPENCODE_CONFIG_DIR",
+                                         config_home.joinpath("opencode")))
+        data_dir = Path(os.environ.get("XDG_DATA_HOME",
+                                       "~/.local/share")).joinpath("opencode")
+        state_dir = Path(os.environ.get("XDG_STATE_HOME",
+                                        "~/.local/state")).joinpath("opencode")
+        cache_dir = Path(os.environ.get("XDG_CACHE_HOME",
+                                        "~/.cache")).joinpath("opencode")
+        bwrap_args.rw_bind(config_dir.as_posix())
+        bwrap_args.rw_bind(data_dir.as_posix())
+        bwrap_args.rw_bind(state_dir.as_posix())
+        bwrap_args.rw_bind(cache_dir.as_posix())
+
+    return bwrap_args.construct()
 
 
-def log_command(cmd: tuple[str, ...]):
+def log_command(cmd: list[str]):
     print("bwrap", *cmd)
 
 
-def run_command(cmd: tuple[str, ...]):
+def run_command(cmd: list[str]):
     os.execvp("bwrap", cmd)
 
 
 def main():
-    args = parse_args()
-    cmd = prepare_command(cast(str, args.command))
-    if (cast(bool, args.dry_run)):
+    args = Args()
+    cmd = prepare_command(args.command)
+    if args.dry_run:
         log_command(cmd)
     else:
         run_command(cmd)
