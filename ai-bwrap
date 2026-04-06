@@ -48,6 +48,7 @@ class ConstrCmd():
         self.bwrap_args.extend(("--tmpfs", path))
 
     def share_net(self):
+        self.ro_bind("/run/systemd/resolve/stub-resolv.conf")
         self.bwrap_args.append("--share-net")
 
     def construct(self) -> list[str]:
