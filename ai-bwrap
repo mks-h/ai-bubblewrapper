@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+
+import argparse
+import os
+from typing import Callable, cast
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        prog="ai-bwrap",
+        description="Uses bubblewrap utility to give your AI agent some safe space",
+    )
+    _ = parser.add_argument(
+        "command", help="The command (agent) ro run in sandbox")
+    _ = parser.add_argument(
+        "-d", "--dry-run", help="Log the command instead of running it", action="store_true")
+    return parser.parse_args()
+
+
+type CmdArgs = Callable[[str], tuple[str, ...]]
+
+
+def prepare_command(cmd: str) -> tuple[str, ...]:
+    ro: CmdArgs = lambda path: ("--ro-bind", path, path)
+    rw: CmdArgs = lambda path: ("--bind", path, path)
+    dev: CmdArgs = lambda path: ("--dev", path)
+    proc: CmdArgs = lambda path: ("--proc", path)
+    tmpfs: CmdArgs = lambda path: ("--tmpfs", path)
+
+    return (*ro("/"), *rw(os.getcwd()), *dev("/dev"),
+            *proc("/proc"), *tmpfs("/run"), *tmpfs("/tmp"),
+            "--share-net",
+            cmd)
+
+
+def log_command(cmd: tuple[str, ...]):
+    print("bwrap", *cmd)
+
+
+def run_command(cmd: tuple[str, ...]):
+    os.execvp("bwrap", cmd)
+
+
+def main():
+    args = parse_args()
+    cmd = prepare_command(cast(str, args.command))
+    if (cast(bool, args.dry_run)):
+        log_command(cmd)
+    else:
+        run_command(cmd)
+
+
+if __name__ == "__main__":
+    main()
