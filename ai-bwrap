@@ -39,52 +39,46 @@ def r(path: Path) -> str:
 
 
 class ConstrCmd():
-    user_cmd: str
-    user_args: list[str] = []
-    bwrap_args: list[str] = []
+    __args: list[str] = []
 
     def ro_bind(self, path: Path):
-        self.bwrap_args.extend(("--ro-bind", r(path), r(path)))
+        self.__args.extend(("--ro-bind", r(path), r(path)))
 
     def rw_bind(self, path: Path):
-        self.bwrap_args.extend(("--bind", r(path), r(path)))
+        self.__args.extend(("--bind", r(path), r(path)))
 
     def dev(self, path: Path):
-        self.bwrap_args.extend(("--dev", r(path)))
+        self.__args.extend(("--dev", r(path)))
 
     def proc(self, path: Path):
-        self.bwrap_args.extend(("--proc", r(path)))
+        self.__args.extend(("--proc", r(path)))
 
     def tmpfs(self, path: Path):
-        self.bwrap_args.extend(("--tmpfs", r(path)))
+        self.__args.extend(("--tmpfs", r(path)))
 
     def share_net(self):
         self.ro_bind(Path("/run/systemd/resolve/stub-resolv.conf"))
-        self.bwrap_args.append("--share-net")
+        self.__args.append("--share-net")
 
-    def construct(self) -> list[str]:
-        self.bwrap_args.append(self.user_cmd)
-        self.bwrap_args.extend(self.user_args)
-        return self.bwrap_args
-
-    def __init__(self, cmd: str, args: list[str]):
-        self.user_cmd = cmd
-        self.user_args = args
+    def construct(self, cmd: str, cmd_args: list[str]) -> list[str]:
+        self.__args.append(cmd)
+        self.__args.extend(cmd_args)
+        return self.__args
 
 
 def prepare_command(cmd: str, args: list[str]) -> list[str]:
-    bwrap_args = ConstrCmd(cmd, args)
-    bwrap_args.ro_bind(Path("/"))
-    bwrap_args.rw_bind(Path(os.getcwd()))
-    bwrap_args.dev(Path("/dev"))
-    bwrap_args.proc(Path("/proc"))
-    bwrap_args.tmpfs(Path("/run"))
-    bwrap_args.tmpfs(Path("/tmp"))
-    bwrap_args.share_net()
+    bwrap = ConstrCmd()
+    bwrap.ro_bind(Path("/"))
+    bwrap.rw_bind(Path(os.getcwd()))
+    bwrap.dev(Path("/dev"))
+    bwrap.proc(Path("/proc"))
+    bwrap.tmpfs(Path("/run"))
+    bwrap.tmpfs(Path("/tmp"))
+    bwrap.share_net()
 
     if (cmd == "pi"):
         config_dir = Path(os.environ.get("PI_CODING_AGENT_DIR", "~/.pi"))
-        bwrap_args.rw_bind(config_dir)
+        bwrap.rw_bind(config_dir)
     elif (cmd == "opencode"):
         config_home = Path(os.environ.get("XDG_CONFIG_HOME", "~/.config"))
         config_dir = Path(os.environ.get("OPENCODE_CONFIG_DIR",
@@ -95,15 +89,15 @@ def prepare_command(cmd: str, args: list[str]) -> list[str]:
                                         "~/.local/state")).joinpath("opencode")
         cache_dir = Path(os.environ.get("XDG_CACHE_HOME",
                                         "~/.cache")).joinpath("opencode")
-        bwrap_args.rw_bind(config_dir)
-        bwrap_args.rw_bind(data_dir)
-        bwrap_args.rw_bind(state_dir)
-        bwrap_args.rw_bind(cache_dir)
+        bwrap.rw_bind(config_dir)
+        bwrap.rw_bind(data_dir)
+        bwrap.rw_bind(state_dir)
+        bwrap.rw_bind(cache_dir)
     elif (cmd == "codex"):
         config_dir = Path(os.environ.get("CODEX_HOME", '~/.codex'))
-        bwrap_args.rw_bind(config_dir)
+        bwrap.rw_bind(config_dir)
 
-    return bwrap_args.construct()
+    return bwrap.construct(cmd, args)
 
 
 def log_command(cmd: list[str]):
