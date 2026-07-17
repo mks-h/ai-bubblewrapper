@@ -7,8 +7,9 @@ from typing import cast
 
 
 class Args:
-    command: str
     dry_run: bool
+    command: str
+    arguments: list[str]
 
     @staticmethod
     def parse_args():
@@ -16,16 +17,21 @@ class Args:
             prog="ai-bwrap",
             description="Uses bubblewrap utility to give your AI agent some safe space",
         )
-        _ = parser.add_argument(
-            "command", help="The command (agent) ro run in sandbox")
-        _ = parser.add_argument(
-            "-d", "--dry-run", help="Log the command instead of running it", action="store_true")
+        _ = parser.add_argument("-d", "--dry-run",
+                                help="Log the command instead of running it", action="store_true")
+        _ = parser.add_argument("command",
+                                help="The command (agent) to run in sandbox")
+        _ = parser.add_argument("arguments",
+                                help="Arguments to the command (agent)",
+                                nargs=argparse.REMAINDER, metavar="...")
+
         return parser.parse_args()
 
     def __init__(self):
         args = Args.parse_args()
-        self.command = cast(str, args.command)
         self.dry_run = cast(bool, args.dry_run)
+        self.command = cast(str, args.command)
+        self.arguments = cast(list[str], args.arguments)
 
 
 def r(path: Path) -> str:
@@ -34,6 +40,7 @@ def r(path: Path) -> str:
 
 class ConstrCmd():
     user_cmd: str
+    user_args: list[str] = []
     bwrap_args: list[str] = []
 
     def ro_bind(self, path: Path):
@@ -57,14 +64,16 @@ class ConstrCmd():
 
     def construct(self) -> list[str]:
         self.bwrap_args.append(self.user_cmd)
+        self.bwrap_args.extend(self.user_args)
         return self.bwrap_args
 
-    def __init__(self, cmd: str):
+    def __init__(self, cmd: str, args: list[str]):
         self.user_cmd = cmd
+        self.user_args = args
 
 
-def prepare_command(cmd: str) -> list[str]:
-    bwrap_args = ConstrCmd(cmd)
+def prepare_command(cmd: str, args: list[str]) -> list[str]:
+    bwrap_args = ConstrCmd(cmd, args)
     bwrap_args.ro_bind(Path("/"))
     bwrap_args.rw_bind(Path(os.getcwd()))
     bwrap_args.dev(Path("/dev"))
@@ -107,7 +116,7 @@ def run_command(cmd: list[str]):
 
 def main():
     args = Args()
-    cmd = prepare_command(args.command)
+    cmd = prepare_command(args.command, args.arguments)
     if args.dry_run:
         log_command(cmd)
     else:
