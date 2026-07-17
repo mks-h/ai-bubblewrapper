@@ -60,6 +60,9 @@ class ConstrCmd():
         self.ro_bind(Path("/run/systemd/resolve/stub-resolv.conf"))
         self.__args.append("--share-net")
 
+    def die_with_parent(self):
+        self.__args.append("--die-with-parent")
+
     def construct(self, cmd: str, cmd_args: list[str]) -> list[str]:
         self.__args.append(cmd)
         self.__args.extend(cmd_args)
@@ -75,6 +78,7 @@ def prepare_command(cmd: str, args: list[str]) -> list[str]:
     bwrap.tmpfs(Path("/run"))
     bwrap.tmpfs(Path("/tmp"))
     bwrap.share_net()
+    bwrap.die_with_parent()
 
     if (cmd == "pi"):
         config_dir = Path(os.environ.get("PI_CODING_AGENT_DIR", "~/.pi"))
