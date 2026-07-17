@@ -102,7 +102,7 @@ def log_command(cmd: list[str]):
 
 
 def run_command(cmd: list[str]):
-    os.execvp("bwrap", cmd)
+    os.execvp("bwrap", ["bwrap", *cmd])
 
 
 def main():
