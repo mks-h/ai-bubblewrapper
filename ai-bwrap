@@ -3,6 +3,9 @@
 import argparse
 import os
 from pathlib import Path
+import shutil
+import subprocess
+import sys
 from typing import cast
 
 
@@ -39,7 +42,7 @@ def r(path: Path) -> str:
 
 
 class ConstrCmd():
-    __args: list[str] = []
+    __args: list[str]
 
     def ro_bind(self, path: Path):
         self.__args.extend(("--ro-bind", r(path), r(path)))
@@ -68,22 +71,29 @@ class ConstrCmd():
         self.__args.extend(cmd_args)
         return self.__args
 
+    def __init__(self):
+        cmd = shutil.which("bwrap")
+        if not cmd:
+            sys.exit(
+                "Error: 'bwrap' executable is not found. Did you install bubblewrap?")
+        self.__args = [cmd]
 
-def prepare_command(cmd: str, args: list[str]) -> list[str]:
-    bwrap = ConstrCmd()
-    bwrap.ro_bind(Path("/"))
-    bwrap.rw_bind(Path(os.getcwd()))
-    bwrap.dev(Path("/dev"))
-    bwrap.proc(Path("/proc"))
-    bwrap.tmpfs(Path("/run"))
-    bwrap.tmpfs(Path("/tmp"))
-    bwrap.share_net()
-    bwrap.die_with_parent()
 
-    if (cmd == "pi"):
+def prepare_agent_cmd(agent_cmd: str, agent_args: list[str]) -> list[str]:
+    cmd = ConstrCmd()
+    cmd.ro_bind(Path("/"))
+    cmd.rw_bind(Path(os.getcwd()))
+    cmd.dev(Path("/dev"))
+    cmd.proc(Path("/proc"))
+    cmd.tmpfs(Path("/run"))
+    cmd.tmpfs(Path("/tmp"))
+    cmd.share_net()
+    cmd.die_with_parent()
+
+    if (agent_cmd == "pi"):
         config_dir = Path(os.environ.get("PI_CODING_AGENT_DIR", "~/.pi"))
-        bwrap.rw_bind(config_dir)
-    elif (cmd == "opencode"):
+        cmd.rw_bind(config_dir)
+    elif (agent_cmd == "opencode"):
         config_home = Path(os.environ.get("XDG_CONFIG_HOME", "~/.config"))
         config_dir = Path(os.environ.get("OPENCODE_CONFIG_DIR",
                                          config_home.joinpath("opencode")))
@@ -93,28 +103,28 @@ def prepare_command(cmd: str, args: list[str]) -> list[str]:
                                         "~/.local/state")).joinpath("opencode")
         cache_dir = Path(os.environ.get("XDG_CACHE_HOME",
                                         "~/.cache")).joinpath("opencode")
-        bwrap.rw_bind(config_dir)
-        bwrap.rw_bind(data_dir)
-        bwrap.rw_bind(state_dir)
-        bwrap.rw_bind(cache_dir)
-    elif (cmd == "codex"):
+        cmd.rw_bind(config_dir)
+        cmd.rw_bind(data_dir)
+        cmd.rw_bind(state_dir)
+        cmd.rw_bind(cache_dir)
+    elif (agent_cmd == "codex"):
         config_dir = Path(os.environ.get("CODEX_HOME", '~/.codex'))
-        bwrap.rw_bind(config_dir)
+        cmd.rw_bind(config_dir)
 
-    return bwrap.construct(cmd, args)
-
-
-def log_command(cmd: list[str]):
-    print("bwrap", *cmd)
+    return cmd.construct(agent_cmd, agent_args)
 
 
-def run_command(cmd: list[str]):
-    os.execvp("bwrap", ["bwrap", *cmd])
+def log_command(agent_cmd: list[str]):
+    print(*agent_cmd)
+
+
+def run_command(agent_cmd: list[str]):
+    _ = subprocess.run(agent_cmd)
 
 
 def main():
     args = Args()
-    cmd = prepare_command(args.command, args.arguments)
+    cmd = prepare_agent_cmd(args.command, args.arguments)
     if args.dry_run:
         log_command(cmd)
     else:
