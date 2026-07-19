@@ -6,6 +6,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
+import time
 from typing import cast
 
 
@@ -47,8 +49,9 @@ class ConstrCmd():
     def ro_bind(self, path: Path):
         self.__args.extend(("--ro-bind", r(path), r(path)))
 
-    def rw_bind(self, path: Path):
-        self.__args.extend(("--bind", r(path), r(path)))
+    def rw_bind(self, path: Path, bind_path: Path | None = None):
+        bind_path = bind_path if bind_path else path
+        self.__args.extend(("--bind", r(path), r(bind_path)))
 
     def dev(self, path: Path):
         self.__args.extend(("--dev", r(path)))
@@ -79,7 +82,21 @@ class ConstrCmd():
         self.__args = [cmd]
 
 
-def prepare_agent_cmd(agent_cmd: str, agent_args: list[str]) -> list[str]:
+def prepare_dbus_proxy_cmd() -> tuple[list[str], Path]:
+    cmd = shutil.which("xdg-dbus-proxy")
+    if not cmd:
+        sys.exit(
+            "Error: 'xdg-dbux-proxy' executable is not found.")
+
+    xdg_runtime_dir = Path(os.environ.get(
+        "XDG_RUNTIME_DIR", "/run/user/%s" % os.getuid()))
+    host_bus = xdg_runtime_dir / "bus"
+    proxy_bus = Path(tempfile.mkdtemp(dir=xdg_runtime_dir)) / "bus"
+
+    return ([cmd, "unix:path=" + host_bus.as_posix(), proxy_bus.as_posix(), "--filter"], proxy_bus)
+
+
+def prepare_agent_cmd(agent_cmd: str, agent_args: list[str], proxy_path: Path) -> list[str]:
     cmd = ConstrCmd()
     cmd.ro_bind(Path("/"))
     cmd.rw_bind(Path(os.getcwd()))
@@ -89,6 +106,10 @@ def prepare_agent_cmd(agent_cmd: str, agent_args: list[str]) -> list[str]:
     cmd.tmpfs(Path("/tmp"))
     cmd.share_net()
     cmd.die_with_parent()
+
+    dbus_path = os.environ.get(
+        "XDG_RUNTIME_DIR", "/run/user/%s" % os.getuid()) + "/bus"
+    cmd.rw_bind(Path(proxy_path), Path(dbus_path))
 
     if (agent_cmd == "pi"):
         config_dir = Path(os.environ.get("PI_CODING_AGENT_DIR", "~/.pi"))
@@ -114,21 +135,32 @@ def prepare_agent_cmd(agent_cmd: str, agent_args: list[str]) -> list[str]:
     return cmd.construct(agent_cmd, agent_args)
 
 
-def log_command(agent_cmd: list[str]):
+def log_command(agent_cmd: list[str], dbus_cmd: list[str]):
+    print(*dbus_cmd)
     print(*agent_cmd)
 
 
-def run_command(agent_cmd: list[str]):
+def run_command(agent_cmd: list[str], dbus_cmd: list[str], proxy_path: Path):
+    proxy = subprocess.Popen(dbus_cmd)
+
+    deadline = time.monotonic() + 1
+    while not proxy_path.exists():
+        if time.monotonic() >= deadline:
+            raise TimeoutError("Timed out waiting for xdg-dbus-proxy")
+        time.sleep(0.01)
+
     _ = subprocess.run(agent_cmd)
+    proxy.terminate()
 
 
 def main():
     args = Args()
-    cmd = prepare_agent_cmd(args.command, args.arguments)
+    proxy_cmd, proxy_path = prepare_dbus_proxy_cmd()
+    agent_cmd = prepare_agent_cmd(args.command, args.arguments, proxy_path)
     if args.dry_run:
-        log_command(cmd)
+        log_command(agent_cmd, proxy_cmd)
     else:
-        run_command(cmd)
+        run_command(agent_cmd, proxy_cmd, proxy_path)
 
 
 if __name__ == "__main__":
