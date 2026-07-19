@@ -93,7 +93,13 @@ def prepare_dbus_proxy_cmd() -> tuple[list[str], Path]:
     host_bus = xdg_runtime_dir / "bus"
     proxy_bus = Path(tempfile.mkdtemp(dir=xdg_runtime_dir)) / "bus"
 
-    return ([cmd, "unix:path=" + host_bus.as_posix(), proxy_bus.as_posix(), "--filter"], proxy_bus)
+    return ([
+        cmd,
+        "unix:path=" + host_bus.as_posix(),
+        proxy_bus.as_posix(),
+        "--filter",
+        "--talk=org.freedesktop.secrets"
+    ], proxy_bus)
 
 
 def prepare_agent_cmd(agent_cmd: str, agent_args: list[str], proxy_path: Path) -> list[str]:
