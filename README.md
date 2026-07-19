@@ -25,6 +25,11 @@ Installing it this way lets you update it in the future by running `git pull`
 in the repo. Although you should still check whether the installation
 instructions have changed when doing an update.
 
+### Dependencies
+
+You most likely have them installed out of the box if your system has Flatpak
+support. The Fedora package names are `bubblewrap` and `xdg-dbux-proxy`.
+
 ## Usage
 
 Run `ai-bwrap opencode` instead of running `opencode` or, better yet, alias
