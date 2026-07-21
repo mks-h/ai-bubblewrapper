@@ -116,6 +116,8 @@ def prepare_agent_cmd(agent_cmd: str, agent_args: list[str], proxy_path: Path) -
     cache_dir = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache"))
     cmd.tmpfs(cache_dir)
 
+    cmd.rw_bind(cache_dir / Path("ms-playwright"))
+
     dbus_path = os.environ.get(
         "XDG_RUNTIME_DIR", "/run/user/%s" % os.getuid()) + "/bus"
     cmd.rw_bind(Path(proxy_path), Path(dbus_path))
