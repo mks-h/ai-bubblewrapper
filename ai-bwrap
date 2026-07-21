@@ -113,6 +113,9 @@ def prepare_agent_cmd(agent_cmd: str, agent_args: list[str], proxy_path: Path) -
     cmd.share_net()
     cmd.die_with_parent()
 
+    cache_dir = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache"))
+    cmd.tmpfs(cache_dir)
+
     dbus_path = os.environ.get(
         "XDG_RUNTIME_DIR", "/run/user/%s" % os.getuid()) + "/bus"
     cmd.rw_bind(Path(proxy_path), Path(dbus_path))
@@ -128,8 +131,7 @@ def prepare_agent_cmd(agent_cmd: str, agent_args: list[str], proxy_path: Path) -
                                        "~/.local/share")).joinpath("opencode")
         state_dir = Path(os.environ.get("XDG_STATE_HOME",
                                         "~/.local/state")).joinpath("opencode")
-        cache_dir = Path(os.environ.get("XDG_CACHE_HOME",
-                                        "~/.cache")).joinpath("opencode")
+        cache_dir = cache_dir.joinpath("opencode")
         cmd.rw_bind(config_dir)
         cmd.rw_bind(data_dir)
         cmd.rw_bind(state_dir)
